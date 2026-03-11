@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { newProject } from "./commands/new-project.js";
+import { runMilestone } from "./commands/milestone.js";
+import { runPlanPhase } from "./commands/plan-phase.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +17,8 @@ function printHelp(json: boolean): void {
     { name: "help", description: "Show this help message" },
     { name: "version", description: "Print version" },
     { name: "status", description: "Show project status" },
+    { name: "milestone", description: "Manage milestones (create/list/complete)" },
+    { name: "plan-phase", description: "Plan a phase (discuss/create-tasks)" },
   ];
 
   if (json) {
@@ -75,6 +79,12 @@ export async function main(args: string[]): Promise<void> {
     case "new-project":
     case "init":
       await newProject(args);
+      break;
+    case "milestone":
+      await runMilestone(args);
+      break;
+    case "plan-phase":
+      await runPlanPhase(args);
       break;
     default:
       console.error(`Unknown command: ${command}\n`);
