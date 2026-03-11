@@ -6,6 +6,8 @@ import { newProject } from "./commands/new-project.js";
 import { runMilestone } from "./commands/milestone.js";
 import { runPlanPhase } from "./commands/plan-phase.js";
 import { runExecutePhase } from "./commands/execute-phase.js";
+import { runDashboard } from "./commands/dashboard.js";
+import { runVerifyPhase } from "./commands/verify-phase.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -21,6 +23,7 @@ function printHelp(json: boolean): void {
     { name: "milestone", description: "Manage milestones (create/list/complete)" },
     { name: "plan-phase", description: "Plan a phase (discuss/create-tasks)" },
     { name: "execute-phase", description: "Execute phase tasks (start/run/finish)" },
+    { name: "dashboard", description: "Dashboard views (show/blockers/phases)" },
   ];
 
   if (json) {
@@ -90,6 +93,9 @@ export async function main(args: string[]): Promise<void> {
       break;
     case "execute-phase":
       await runExecutePhase(args);
+      break;
+    case "dashboard":
+      runDashboard(args.slice(args.indexOf("dashboard") + 1));
       break;
     default:
       console.error(`Unknown command: ${command}\n`);
