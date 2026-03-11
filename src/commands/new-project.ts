@@ -6,6 +6,8 @@
  * auto (non-interactive) modes.
  */
 
+import { autoSpec } from "./new-project-auto.js";
+
 export interface Requirement {
   title: string;
   description: string;
@@ -113,9 +115,18 @@ async function runInteractive(flags: NewProjectFlags): Promise<void> {
 }
 
 async function runAuto(flags: NewProjectFlags): Promise<void> {
-  // Placeholder: auto mode will be implemented in a later task.
-  console.log("Auto new-project flow (not yet implemented).");
-  console.log("Flags received:", flags);
+  let spec: ProjectSpec;
+  try {
+    spec = autoSpec(flags);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${msg}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log("Project spec built:");
+  console.log(JSON.stringify(spec, null, 2));
 }
 
 export async function newProject(args: string[]): Promise<void> {
