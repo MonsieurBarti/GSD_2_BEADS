@@ -8,6 +8,7 @@ import { runPlanPhase } from "./commands/plan-phase.js";
 import { runExecutePhase } from "./commands/execute-phase.js";
 import { runDashboard } from "./commands/dashboard.js";
 import { runVerifyPhase } from "./commands/verify-phase.js";
+import { runRemember, runRecall } from "./commands/remember.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,6 +26,8 @@ function printHelp(json: boolean): void {
     { name: "execute-phase", description: "Execute phase tasks (start/run/finish)" },
     { name: "dashboard", description: "Dashboard views (show/blockers/phases)" },
     { name: "verify-phase", description: "Verify phase quality (check/coverage)" },
+    { name: "remember", description: "Store a named memory value" },
+    { name: "recall", description: "Retrieve a named memory value" },
   ];
 
   if (json) {
@@ -100,6 +103,12 @@ export async function main(args: string[]): Promise<void> {
       break;
     case "verify-phase":
       runVerifyPhase(args.slice(args.indexOf("verify-phase") + 1));
+      break;
+    case "remember":
+      runRemember(args.slice(args.indexOf("remember") + 1));
+      break;
+    case "recall":
+      runRecall(args.slice(args.indexOf("recall") + 1));
       break;
     default:
       console.error(`Unknown command: ${command}\n`);
