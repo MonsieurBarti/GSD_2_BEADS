@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -39,10 +40,20 @@ function printVersion(json: boolean): void {
 }
 
 function printStatus(json: boolean): void {
-  if (json) {
-    console.log(JSON.stringify({ status: "ok", message: "No project initialized" }));
-  } else {
-    console.log("No project initialized. Run gsd2b init to get started.");
+  try {
+    const output = execFileSync("bd", ["stats"], { encoding: "utf-8" }).trim();
+    if (json) {
+      const ready = execFileSync("bd", ["ready", "--json"], { encoding: "utf-8" }).trim();
+      console.log(JSON.stringify({ status: "ok", stats: output, ready: JSON.parse(ready) }));
+    } else {
+      console.log(output);
+    }
+  } catch {
+    if (json) {
+      console.log(JSON.stringify({ status: "ok", message: "No project initialized" }));
+    } else {
+      console.log("No project initialized. Run gsd2b init to get started.");
+    }
   }
 }
 
