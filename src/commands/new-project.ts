@@ -7,6 +7,7 @@
  */
 
 import { autoSpec } from "./new-project-auto.js";
+import { materialize } from "./new-project-beads.js";
 
 export interface Requirement {
   title: string;
@@ -108,10 +109,10 @@ function isTTY(): boolean {
   return Boolean(process.stdin.isTTY);
 }
 
-async function runInteractive(flags: NewProjectFlags): Promise<void> {
-  // Placeholder: interactive vision capture will be implemented in a later task.
-  console.log("Interactive new-project flow (not yet implemented).");
-  console.log("Flags received:", flags);
+async function runInteractive(_flags: NewProjectFlags): Promise<void> {
+  const { discuss } = await import("./new-project-interactive.js");
+  const spec = await discuss();
+  materialize(spec);
 }
 
 async function runAuto(flags: NewProjectFlags): Promise<void> {
@@ -125,8 +126,7 @@ async function runAuto(flags: NewProjectFlags): Promise<void> {
     return;
   }
 
-  console.log("Project spec built:");
-  console.log(JSON.stringify(spec, null, 2));
+  materialize(spec);
 }
 
 export async function newProject(args: string[]): Promise<void> {
