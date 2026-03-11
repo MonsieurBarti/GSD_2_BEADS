@@ -6,6 +6,18 @@
  * auto (non-interactive) modes.
  */
 
+export interface Requirement {
+  title: string;
+  description: string;
+}
+
+export interface ProjectSpec {
+  name: string;
+  vision: string;
+  constraints: string;
+  requirements: Requirement[];
+}
+
 export interface NewProjectFlags {
   vision?: string;
   description?: string;
