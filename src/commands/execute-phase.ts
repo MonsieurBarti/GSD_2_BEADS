@@ -27,21 +27,24 @@ export interface ExecutePhaseFlags {
   phaseId?: string;
   baseBranch?: string;
   dryRun?: boolean;
+  cleanup?: boolean;
 }
 
-const KNOWN_FLAGS = new Set(["--base-branch", "--help", "--dry-run"]);
+const KNOWN_FLAGS = new Set(["--base-branch", "--help", "--dry-run", "--cleanup"]);
 
 function printUsage(): void {
   console.log("Usage: gsd2b execute-phase <subcommand> [options]\n");
   console.log("Subcommands:");
   console.log("  start PHASE_ID   Validate phase, create git branch, mark in_progress");
   console.log("  run PHASE_ID     Wave-based task dispatch with git commits per task");
-  console.log("  finish PHASE_ID  (not yet implemented)\n");
+  console.log("  finish PHASE_ID  Verify all tasks closed, close phase, print merge suggestion\n");
   console.log("Options (start):");
   console.log("  --base-branch <branch>  Branch to fork from (default: current branch)");
   console.log("  --help                  Show this help message\n");
   console.log("Options (run):");
-  console.log("  --dry-run               Show wave plan without executing");
+  console.log("  --dry-run               Show wave plan without executing\n");
+  console.log("Options (finish):");
+  console.log("  --cleanup               Delete the phase branch after suggesting merge");
 }
 
 export function parseFlags(args: string[]): ExecutePhaseFlags | null {
@@ -67,6 +70,11 @@ export function parseFlags(args: string[]): ExecutePhaseFlags | null {
 
     if (arg === "--dry-run") {
       flags.dryRun = true;
+      continue;
+    }
+
+    if (arg === "--cleanup") {
+      flags.cleanup = true;
       continue;
     }
 
@@ -361,6 +369,63 @@ async function runRun(flags: ExecutePhaseFlags): Promise<void> {
   console.log(`\nPhase ${phaseId} execution complete. ${completedCount} task(s) committed.`);
 }
 
+async function runFinish(flags: ExecutePhaseFlags): Promise<void> {
+  if (!flags.phaseId) {
+    console.error("Error: PHASE_ID is required for finish.\n");
+    printUsage();
+    process.exitCode = 1;
+    return;
+  }
+
+  const phaseId = flags.phaseId;
+
+  // Check for open child tasks
+  const openTasks = getOpenChildTasks(phaseId);
+  if (openTasks.length > 0) {
+    console.error(`Error: Phase ${phaseId} still has open tasks:`);
+    for (const task of openTasks) {
+      console.error(`  ${task}`);
+    }
+    console.error("\nClose all tasks before finishing the phase.");
+    process.exitCode = 1;
+    return;
+  }
+
+  // Close the phase bead
+  try {
+    execFileSync("bd", ["close", phaseId, '--reason=All tasks completed'], {
+      encoding: "utf-8",
+      stdio: "inherit",
+      timeout: 30_000,
+    });
+    console.log(`Phase ${phaseId} closed.`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error closing phase ${phaseId}: ${msg}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Print merge suggestion
+  console.log(`\nPhase complete. To merge: git checkout main && git merge phase/${phaseId}`);
+
+  // --cleanup: delete phase branch
+  if (flags.cleanup) {
+    try {
+      execFileSync("git", ["branch", "-d", `phase/${phaseId}`], {
+        encoding: "utf-8",
+        stdio: "inherit",
+        timeout: 30_000,
+      });
+      console.log(`Deleted branch: phase/${phaseId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Warning: could not delete branch phase/${phaseId}: ${msg}`);
+      process.exitCode = 1;
+    }
+  }
+}
+
 // --- main export ---
 
 export async function runExecutePhase(args: string[]): Promise<void> {
@@ -388,7 +453,7 @@ export async function runExecutePhase(args: string[]): Promise<void> {
       await runRun(flags);
       break;
     case "finish":
-      console.log("Not yet implemented: finish");
+      await runFinish(flags);
       break;
     default:
       console.error(`Unknown subcommand: ${subcommand}\n`);

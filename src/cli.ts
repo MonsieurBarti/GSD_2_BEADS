@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { newProject } from "./commands/new-project.js";
 import { runMilestone } from "./commands/milestone.js";
 import { runPlanPhase } from "./commands/plan-phase.js";
+import { runExecutePhase } from "./commands/execute-phase.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,7 @@ function printHelp(json: boolean): void {
     { name: "status", description: "Show project status" },
     { name: "milestone", description: "Manage milestones (create/list/complete)" },
     { name: "plan-phase", description: "Plan a phase (discuss/create-tasks)" },
+    { name: "execute-phase", description: "Execute phase tasks (start/run/finish)" },
   ];
 
   if (json) {
@@ -85,6 +87,9 @@ export async function main(args: string[]): Promise<void> {
       break;
     case "plan-phase":
       await runPlanPhase(args);
+      break;
+    case "execute-phase":
+      await runExecutePhase(args);
       break;
     default:
       console.error(`Unknown command: ${command}\n`);
