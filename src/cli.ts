@@ -24,6 +24,7 @@ function printHelp(json: boolean): void {
     { name: "plan-phase", description: "Plan a phase (discuss/create-tasks)" },
     { name: "execute-phase", description: "Execute phase tasks (start/run/finish)" },
     { name: "dashboard", description: "Dashboard views (show/blockers/phases)" },
+    { name: "verify-phase", description: "Verify phase quality (check/coverage)" },
   ];
 
   if (json) {
@@ -96,6 +97,9 @@ export async function main(args: string[]): Promise<void> {
       break;
     case "dashboard":
       runDashboard(args.slice(args.indexOf("dashboard") + 1));
+      break;
+    case "verify-phase":
+      runVerifyPhase(args.slice(args.indexOf("verify-phase") + 1));
       break;
     default:
       console.error(`Unknown command: ${command}\n`);
