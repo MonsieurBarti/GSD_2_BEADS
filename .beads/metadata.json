@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "GSD_2_BEADS",
+  "project_id": "efdbc737-adaa-4ea7-9592-7d9f1d766ace"
+}
