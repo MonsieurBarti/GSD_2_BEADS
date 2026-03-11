@@ -115,10 +115,18 @@ interface BeadItem {
 }
 
 function runList(): void {
-  const stdout = execFileSync("bd", ["list", "--label", "forge:milestone", "--json"], {
-    encoding: "utf-8",
-    timeout: 30_000,
-  }).trim();
+  let stdout: string;
+  try {
+    stdout = execFileSync("bd", ["list", "--label", "forge:milestone", "--json"], {
+      encoding: "utf-8",
+      timeout: 30_000,
+    }).trim();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Error: could not retrieve milestones: ${message}\n`);
+    process.exitCode = 1;
+    return;
+  }
 
   if (!stdout) {
     console.log("No milestones found.");
@@ -128,8 +136,9 @@ function runList(): void {
   let items: BeadItem[];
   try {
     items = JSON.parse(stdout) as BeadItem[];
-  } catch {
-    console.error("Error: failed to parse milestone list output");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Error: failed to parse milestone list output: ${message}\n`);
     process.exitCode = 1;
     return;
   }
@@ -149,8 +158,7 @@ function runComplete(args: string[]): void {
   const milestoneId = args[0];
 
   if (!milestoneId || milestoneId.startsWith("-")) {
-    console.error("Error: MILESTONE_ID is required\n");
-    console.log("Usage: gsd2b milestone complete <MILESTONE_ID>");
+    process.stderr.write("Error: MILESTONE_ID is required\n\nUsage: gsd2b milestone complete <MILESTONE_ID>\n");
     process.exitCode = 1;
     return;
   }

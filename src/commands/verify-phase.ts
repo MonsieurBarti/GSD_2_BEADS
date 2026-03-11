@@ -4,6 +4,9 @@
  * Supports two subcommands:
  *   check PHASE_ID    — report tasks missing acceptance criteria and open tasks with AC
  *   coverage PHASE_ID — report forge:req beads without validates links from phase tasks
+ *
+ * Options (all subcommands):
+ *   --json  Output results as JSON
  */
 
 import { execFileSync } from "node:child_process";
@@ -22,6 +25,7 @@ function printUsage(): void {
   console.log("  check    <PHASE_ID>  Report tasks missing AC and open tasks with AC");
   console.log("  coverage <PHASE_ID>  Report forge:req beads without validates links\n");
   console.log("Options:");
+  console.log("  --json  Output results as JSON");
   console.log("  --help  Show this help message");
 }
 
@@ -46,7 +50,9 @@ function fetchBead(id: string): BeadItem | null {
     }).trim();
     const items = JSON.parse(out) as BeadItem[];
     return items[0] ?? null;
-  } catch {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Warning: could not fetch bead ${id}: ${message}\n`);
     return null;
   }
 }
@@ -60,7 +66,7 @@ function getChildren(phaseId: string): BeadItem[] | null {
     }).trim();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error: could not retrieve children for ${phaseId}: ${message}`);
+    process.stderr.write(`Error: could not retrieve children for ${phaseId}: ${message}\n`);
     process.exitCode = 1;
     return null;
   }
@@ -91,10 +97,12 @@ function runCheck(args: string[]): void {
     return;
   }
 
-  const phaseId = args[0];
-  if (!phaseId || phaseId.startsWith("-")) {
-    console.error("Error: PHASE_ID is required\n");
-    console.log("Usage: gsd2b verify-phase check <PHASE_ID>");
+  const jsonFlag = args.includes("--json");
+  const positional = args.filter((a) => !a.startsWith("-"));
+  const phaseId = positional[0];
+
+  if (!phaseId) {
+    process.stderr.write("Error: PHASE_ID is required\n\nUsage: gsd2b verify-phase check <PHASE_ID> [--json]\n");
     process.exitCode = 1;
     return;
   }
@@ -118,6 +126,22 @@ function runCheck(args: string[]): void {
     }
   }
 
+  const gaps = missingAC.length + openWithAC.length;
+
+  if (jsonFlag) {
+    console.log(JSON.stringify({
+      phaseId,
+      total: children.length,
+      gaps,
+      missing_ac: missingAC.map((t) => ({ id: t.id, status: t.status, title: t.title })),
+      open_with_ac: openWithAC.map((t) => ({ id: t.id, status: t.status, title: t.title })),
+    }));
+    if (gaps > 0) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   console.log(`Phase: ${phaseId}`);
   console.log(`Total tasks: ${children.length}\n`);
 
@@ -139,7 +163,6 @@ function runCheck(args: string[]): void {
     }
   }
 
-  const gaps = missingAC.length + openWithAC.length;
   console.log(`\nSummary: ${gaps} gap(s) found.`);
 
   if (gaps > 0) {
@@ -153,10 +176,12 @@ function runCoverage(args: string[]): void {
     return;
   }
 
-  const phaseId = args[0];
-  if (!phaseId || phaseId.startsWith("-")) {
-    console.error("Error: PHASE_ID is required\n");
-    console.log("Usage: gsd2b verify-phase coverage <PHASE_ID>");
+  const jsonFlag = args.includes("--json");
+  const positional = args.filter((a) => !a.startsWith("-"));
+  const phaseId = positional[0];
+
+  if (!phaseId) {
+    process.stderr.write("Error: PHASE_ID is required\n\nUsage: gsd2b verify-phase coverage <PHASE_ID> [--json]\n");
     process.exitCode = 1;
     return;
   }
@@ -170,7 +195,7 @@ function runCoverage(args: string[]): void {
     }).trim();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error: could not list forge:req beads: ${message}`);
+    process.stderr.write(`Error: could not list forge:req beads: ${message}\n`);
     process.exitCode = 1;
     return;
   }
@@ -185,7 +210,11 @@ function runCoverage(args: string[]): void {
   }
 
   if (reqs.length === 0) {
-    console.log("No forge:req beads found.");
+    if (jsonFlag) {
+      console.log(JSON.stringify({ phaseId, total_reqs: 0, covered: [], uncovered: [] }));
+    } else {
+      console.log("No forge:req beads found.");
+    }
     return;
   }
 
@@ -206,7 +235,9 @@ function runCoverage(args: string[]): void {
         encoding: "utf-8",
         timeout: 30_000,
       }).trim();
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`Warning: could not list deps for ${req.id}: ${message}\n`);
       depOutput = "";
     }
 
@@ -219,6 +250,19 @@ function runCoverage(args: string[]): void {
     } else {
       uncovered.push(req);
     }
+  }
+
+  if (jsonFlag) {
+    console.log(JSON.stringify({
+      phaseId,
+      total_reqs: reqs.length,
+      covered: covered.map((r) => ({ id: r.id, status: r.status, title: r.title })),
+      uncovered: uncovered.map((r) => ({ id: r.id, status: r.status, title: r.title })),
+    }));
+    if (uncovered.length > 0) {
+      process.exitCode = 1;
+    }
+    return;
   }
 
   console.log(`Phase: ${phaseId}`);
@@ -267,7 +311,7 @@ export function runVerifyPhase(args: string[]): void {
     return;
   }
 
-  console.error(`Unknown subcommand: ${subcommand}\n`);
+  process.stderr.write(`Unknown subcommand: ${subcommand}\n\n`);
   printUsage();
   process.exitCode = 1;
 }

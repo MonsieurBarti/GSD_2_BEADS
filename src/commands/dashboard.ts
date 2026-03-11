@@ -5,6 +5,9 @@
  *   show [PHASE_ID]     — print open/closed/blocked counts and completion %
  *   blockers [PHASE_ID] — list blocked child beads with dependency info
  *   phases              — list all forge:phase beads with per-phase status summary
+ *
+ * Options (all subcommands):
+ *   --json  Output results as JSON
  */
 
 import { execFileSync } from "node:child_process";
@@ -22,6 +25,7 @@ function printUsage(): void {
   console.log("  blockers [PHASE_ID] List blocked child beads");
   console.log("  phases              List all forge:phase beads with status summary\n");
   console.log("Options:");
+  console.log("  --json  Output results as JSON");
   console.log("  --help  Show this help message");
 }
 
@@ -46,7 +50,9 @@ function fetchBead(id: string): BeadItem | null {
     }).trim();
     const items = JSON.parse(out) as BeadItem[];
     return items[0] ?? null;
-  } catch {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Warning: could not fetch bead ${id}: ${message}\n`);
     return null;
   }
 }
@@ -60,7 +66,7 @@ function fetchChildren(phaseId: string): BeadItem[] | null {
     }).trim();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error: could not retrieve children for ${phaseId}: ${message}`);
+    process.stderr.write(`Error: could not retrieve children for ${phaseId}: ${message}\n`);
     process.exitCode = 1;
     return null;
   }
@@ -87,11 +93,12 @@ function fetchChildren(phaseId: string): BeadItem[] | null {
 }
 
 function runShow(args: string[]): void {
-  const phaseId = args[0];
+  const jsonFlag = args.includes("--json");
+  const positional = args.filter((a) => !a.startsWith("-"));
+  const phaseId = positional[0];
 
-  if (!phaseId || phaseId.startsWith("-")) {
-    console.error("Error: PHASE_ID is required\n");
-    console.log("Usage: gsd2b dashboard show <PHASE_ID>");
+  if (!phaseId) {
+    process.stderr.write("Error: PHASE_ID is required\n\nUsage: gsd2b dashboard show <PHASE_ID> [--json]\n");
     process.exitCode = 1;
     return;
   }
@@ -101,16 +108,21 @@ function runShow(args: string[]): void {
     return;
   }
 
-  if (children.length === 0) {
-    console.log(`No children found for phase ${phaseId}.`);
-    return;
-  }
-
   const total = children.length;
   const closed = children.filter((c) => c.status === "closed").length;
   const blocked = children.filter((c) => c.status === "blocked").length;
   const open = total - closed - blocked;
   const pct = total > 0 ? Math.round((closed / total) * 100) : 0;
+
+  if (jsonFlag) {
+    console.log(JSON.stringify({ phaseId, total, open, closed, blocked, completion_pct: pct }));
+    return;
+  }
+
+  if (total === 0) {
+    console.log(`No children found for phase ${phaseId}.`);
+    return;
+  }
 
   console.log(`Phase ${phaseId} — Dashboard Summary`);
   console.log(`  Total    : ${total}`);
@@ -121,11 +133,12 @@ function runShow(args: string[]): void {
 }
 
 function runBlockers(args: string[]): void {
-  const phaseId = args[0];
+  const jsonFlag = args.includes("--json");
+  const positional = args.filter((a) => !a.startsWith("-"));
+  const phaseId = positional[0];
 
-  if (!phaseId || phaseId.startsWith("-")) {
-    console.error("Error: PHASE_ID is required\n");
-    console.log("Usage: gsd2b dashboard blockers <PHASE_ID>");
+  if (!phaseId) {
+    process.stderr.write("Error: PHASE_ID is required\n\nUsage: gsd2b dashboard blockers <PHASE_ID> [--json]\n");
     process.exitCode = 1;
     return;
   }
@@ -136,6 +149,11 @@ function runBlockers(args: string[]): void {
   }
 
   const blocked = children.filter((c) => c.status === "blocked");
+
+  if (jsonFlag) {
+    console.log(JSON.stringify({ phaseId, blockers: blocked }));
+    return;
+  }
 
   if (blocked.length === 0) {
     console.log(`No blocked items found for phase ${phaseId}.`);
@@ -148,7 +166,9 @@ function runBlockers(args: string[]): void {
   }
 }
 
-function runPhases(): void {
+function runPhases(args: string[]): void {
+  const jsonFlag = args.includes("--json");
+
   let stdout: string;
   try {
     stdout = execFileSync("bd", ["list", "--label", "forge:phase", "--status=all"], {
@@ -157,19 +177,27 @@ function runPhases(): void {
     }).trim();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error: could not retrieve phases: ${message}`);
+    process.stderr.write(`Error: could not retrieve phases: ${message}\n`);
     process.exitCode = 1;
     return;
   }
 
   if (!stdout) {
-    console.log("No phases found.");
+    if (jsonFlag) {
+      console.log(JSON.stringify([]));
+    } else {
+      console.log("No phases found.");
+    }
     return;
   }
 
   const phaseIds = extractIds(stdout);
   if (phaseIds.length === 0) {
-    console.log("No phases found.");
+    if (jsonFlag) {
+      console.log(JSON.stringify([]));
+    } else {
+      console.log("No phases found.");
+    }
     return;
   }
 
@@ -182,7 +210,27 @@ function runPhases(): void {
   }
 
   if (phases.length === 0) {
-    console.log("No phases found.");
+    if (jsonFlag) {
+      console.log(JSON.stringify([]));
+    } else {
+      console.log("No phases found.");
+    }
+    return;
+  }
+
+  if (jsonFlag) {
+    const result = [];
+    for (const phase of phases) {
+      const children = fetchChildren(phase.id);
+      if (children === null) continue;
+      const total = children.length;
+      const closed = children.filter((c) => c.status === "closed").length;
+      const blocked = children.filter((c) => c.status === "blocked").length;
+      const open = total - closed - blocked;
+      const pct = total > 0 ? Math.round((closed / total) * 100) : 0;
+      result.push({ id: phase.id, title: phase.title, status: phase.status, total, open, closed, blocked, completion_pct: pct });
+    }
+    console.log(JSON.stringify(result));
     return;
   }
 
@@ -225,11 +273,11 @@ export function runDashboard(args: string[]): void {
   }
 
   if (subcommand === "phases") {
-    runPhases();
+    runPhases(rest);
     return;
   }
 
-  console.error(`Unknown subcommand: ${subcommand}\n`);
+  process.stderr.write(`Unknown subcommand: ${subcommand}\n\n`);
   printUsage();
   process.exitCode = 1;
 }
