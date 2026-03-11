@@ -1,0 +1,18 @@
+{
+  "name": "gsd2b",
+  "version": "0.1.0",
+  "description": "GSD-2 rewrite with beads-backed state management for AI agent dev workflows",
+  "type": "module",
+  "bin": {
+    "gsd2b": "dist/loader.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "typescript": "^5.7.0"
+  }
+}
