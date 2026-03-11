@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { newProject } from "./commands/new-project.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,7 +58,7 @@ function printStatus(json: boolean): void {
   }
 }
 
-export function main(args: string[]): void {
+export async function main(args: string[]): Promise<void> {
   const json = args.includes("--json");
   const command = args.find((a) => !a.startsWith("-")) ?? "help";
 
@@ -71,7 +72,12 @@ export function main(args: string[]): void {
     case "status":
       printStatus(json);
       break;
+    case "new-project":
+    case "init":
+      await newProject(args);
+      break;
     default:
+      console.error(`Unknown command: ${command}\n`);
       printHelp(json);
       process.exitCode = 1;
       break;
