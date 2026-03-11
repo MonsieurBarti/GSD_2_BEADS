@@ -5,6 +5,7 @@
  * optional requirement linkage via validates dependencies.
  */
 
+import { execFileSync } from "node:child_process";
 import { createEpic, addDep } from "../bead-helpers.js";
 
 export interface MilestoneCreateFlags {
@@ -18,7 +19,9 @@ const KNOWN_FLAGS = new Set(["--title", "--description", "--req"]);
 function printUsage(): void {
   console.log("Usage: gsd2b milestone <subcommand> [options]\n");
   console.log("Subcommands:");
-  console.log("  create    Create a new milestone\n");
+  console.log("  create    Create a new milestone");
+  console.log("  list      List all milestones");
+  console.log("  complete  Close a milestone and print audit summary\n");
   console.log("Options for create:");
   console.log("  --title <text>        Milestone title (required)");
   console.log("  --description <text>  Milestone description");
@@ -105,6 +108,96 @@ function runCreate(args: string[]): void {
   }
 }
 
+interface BeadItem {
+  id: string;
+  title: string;
+  status: string;
+}
+
+function runList(): void {
+  const stdout = execFileSync("bd", ["list", "--label", "forge:milestone", "--json"], {
+    encoding: "utf-8",
+    timeout: 30_000,
+  }).trim();
+
+  if (!stdout) {
+    console.log("No milestones found.");
+    return;
+  }
+
+  let items: BeadItem[];
+  try {
+    items = JSON.parse(stdout) as BeadItem[];
+  } catch {
+    console.error("Error: failed to parse milestone list output");
+    process.exitCode = 1;
+    return;
+  }
+
+  if (items.length === 0) {
+    console.log("No milestones found.");
+    return;
+  }
+
+  console.log("Milestones:");
+  for (const item of items) {
+    console.log(`  ${item.id}  [${item.status}]  ${item.title}`);
+  }
+}
+
+function runComplete(args: string[]): void {
+  const milestoneId = args[0];
+
+  if (!milestoneId || milestoneId.startsWith("-")) {
+    console.error("Error: MILESTONE_ID is required\n");
+    console.log("Usage: gsd2b milestone complete <MILESTONE_ID>");
+    process.exitCode = 1;
+    return;
+  }
+
+  // Get child stats
+  let children: BeadItem[] = [];
+  try {
+    const childOutput = execFileSync("bd", ["children", milestoneId, "--json"], {
+      encoding: "utf-8",
+      timeout: 30_000,
+    }).trim();
+
+    if (childOutput) {
+      children = JSON.parse(childOutput) as BeadItem[];
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error: could not retrieve children for ${milestoneId}: ${message}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Close the milestone
+  try {
+    execFileSync("bd", ["close", milestoneId], {
+      encoding: "utf-8",
+      timeout: 30_000,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error: could not close milestone ${milestoneId}: ${message}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Audit summary
+  const total = children.length;
+  const closed = children.filter((c) => c.status === "closed").length;
+  const open = total - closed;
+
+  console.log(`Milestone ${milestoneId} closed.`);
+  console.log(`Audit summary:`);
+  console.log(`  Total children : ${total}`);
+  console.log(`  Open           : ${open}`);
+  console.log(`  Closed         : ${closed}`);
+}
+
 export function runMilestone(args: string[]): void {
   const [subcommand, ...rest] = args;
 
@@ -115,6 +208,16 @@ export function runMilestone(args: string[]): void {
 
   if (subcommand === "create") {
     runCreate(rest);
+    return;
+  }
+
+  if (subcommand === "list") {
+    runList();
+    return;
+  }
+
+  if (subcommand === "complete") {
+    runComplete(rest);
     return;
   }
 
