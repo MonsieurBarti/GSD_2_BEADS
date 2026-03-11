@@ -9,6 +9,7 @@ import { runExecutePhase } from "./commands/execute-phase.js";
 import { runDashboard } from "./commands/dashboard.js";
 import { runVerifyPhase } from "./commands/verify-phase.js";
 import { runRemember, runRecall } from "./commands/remember.js";
+import { runPrimeContext } from "./commands/prime-context.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +29,7 @@ function printHelp(json: boolean): void {
     { name: "verify-phase", description: "Verify phase quality (check/coverage)" },
     { name: "remember", description: "Store a named memory value" },
     { name: "recall", description: "Retrieve a named memory value" },
+    { name: "prime-context", description: "Assemble agent context for a phase (markdown/JSON)" },
   ];
 
   if (json) {
@@ -109,6 +111,9 @@ export async function main(args: string[]): Promise<void> {
       break;
     case "recall":
       runRecall(args.slice(args.indexOf("recall") + 1));
+      break;
+    case "prime-context":
+      runPrimeContext(args.slice(args.indexOf("prime-context") + 1));
       break;
     default:
       console.error(`Unknown command: ${command}\n`);
