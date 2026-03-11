@@ -16,13 +16,6 @@ interface BeadItem {
   labels?: string[];
 }
 
-interface DepItem {
-  id: string;
-  from_id: string;
-  to_id: string;
-  dep_type: string;
-}
-
 function printUsage(): void {
   console.log("Usage: gsd2b verify-phase <subcommand> <PHASE_ID>\n");
   console.log("Subcommands:");
@@ -32,10 +25,36 @@ function printUsage(): void {
   console.log("  --help  Show this help message");
 }
 
+/** Extract bead IDs from bd tree output */
+function extractIds(treeOutput: string): string[] {
+  const ids: string[] = [];
+  const idPattern = /\bGSD_2_BEADS-\w+/g;
+  for (const line of treeOutput.split("\n")) {
+    const match = line.match(idPattern);
+    if (match) {
+      ids.push(match[0]);
+    }
+  }
+  return ids;
+}
+
+function fetchBead(id: string): BeadItem | null {
+  try {
+    const out = execFileSync("bd", ["show", id, "--json"], {
+      encoding: "utf-8",
+      timeout: 30_000,
+    }).trim();
+    const items = JSON.parse(out) as BeadItem[];
+    return items[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function getChildren(phaseId: string): BeadItem[] | null {
   let output: string;
   try {
-    output = execFileSync("bd", ["children", phaseId, "--json"], {
+    output = execFileSync("bd", ["children", phaseId], {
       encoding: "utf-8",
       timeout: 30_000,
     }).trim();
@@ -50,13 +69,20 @@ function getChildren(phaseId: string): BeadItem[] | null {
     return [];
   }
 
-  try {
-    return JSON.parse(output) as BeadItem[];
-  } catch {
-    console.error("Error: failed to parse children output");
-    process.exitCode = 1;
-    return null;
+  const ids = extractIds(output);
+  const childIds = ids.slice(1); // skip parent
+  if (childIds.length === 0) {
+    return [];
   }
+
+  const items: BeadItem[] = [];
+  for (const id of childIds) {
+    const bead = fetchBead(id);
+    if (bead) {
+      items.push(bead);
+    }
+  }
+  return items;
 }
 
 function runCheck(args: string[]): void {
@@ -138,7 +164,7 @@ function runCoverage(args: string[]): void {
   // Get all forge:req beads
   let reqOutput: string;
   try {
-    reqOutput = execFileSync("bd", ["list", "--label", "forge:req", "--json"], {
+    reqOutput = execFileSync("bd", ["list", "--label", "forge:req"], {
       encoding: "utf-8",
       timeout: 30_000,
     }).trim();
@@ -149,14 +175,12 @@ function runCoverage(args: string[]): void {
     return;
   }
 
-  let reqs: BeadItem[] = [];
-  if (reqOutput) {
-    try {
-      reqs = JSON.parse(reqOutput) as BeadItem[];
-    } catch {
-      console.error("Error: failed to parse forge:req list output");
-      process.exitCode = 1;
-      return;
+  const reqIds = reqOutput ? extractIds(reqOutput) : [];
+  const reqs: BeadItem[] = [];
+  for (const id of reqIds) {
+    const bead = fetchBead(id);
+    if (bead) {
+      reqs.push(bead);
     }
   }
 
@@ -178,7 +202,7 @@ function runCoverage(args: string[]): void {
   for (const req of reqs) {
     let depOutput: string;
     try {
-      depOutput = execFileSync("bd", ["dep", "list", req.id, "--type", "validates", "--json"], {
+      depOutput = execFileSync("bd", ["dep", "list", req.id, "--type", "validates"], {
         encoding: "utf-8",
         timeout: 30_000,
       }).trim();
@@ -186,18 +210,9 @@ function runCoverage(args: string[]): void {
       depOutput = "";
     }
 
-    let deps: DepItem[] = [];
-    if (depOutput) {
-      try {
-        deps = JSON.parse(depOutput) as DepItem[];
-      } catch {
-        deps = [];
-      }
-    }
-
-    const hasPhaseValidation = deps.some(
-      (d) => phaseTaskIds.has(d.from_id) || phaseTaskIds.has(d.to_id),
-    );
+    // Extract IDs from dep output and check for phase task overlap
+    const depIds = depOutput ? extractIds(depOutput) : [];
+    const hasPhaseValidation = depIds.some((id) => phaseTaskIds.has(id));
 
     if (hasPhaseValidation) {
       covered.push(req);

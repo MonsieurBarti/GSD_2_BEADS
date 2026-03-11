@@ -25,10 +25,36 @@ function printUsage(): void {
   console.log("  --help  Show this help message");
 }
 
+/** Extract bead IDs from bd tree output, then fetch each via bd show --json */
+function extractIds(treeOutput: string): string[] {
+  const ids: string[] = [];
+  const idPattern = /\bGSD_2_BEADS-\w+/g;
+  for (const line of treeOutput.split("\n")) {
+    const match = line.match(idPattern);
+    if (match) {
+      ids.push(match[0]);
+    }
+  }
+  return ids;
+}
+
+function fetchBead(id: string): BeadItem | null {
+  try {
+    const out = execFileSync("bd", ["show", id, "--json"], {
+      encoding: "utf-8",
+      timeout: 30_000,
+    }).trim();
+    const items = JSON.parse(out) as BeadItem[];
+    return items[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function fetchChildren(phaseId: string): BeadItem[] | null {
   let stdout: string;
   try {
-    stdout = execFileSync("bd", ["children", phaseId, "--json"], {
+    stdout = execFileSync("bd", ["children", phaseId], {
       encoding: "utf-8",
       timeout: 30_000,
     }).trim();
@@ -43,13 +69,21 @@ function fetchChildren(phaseId: string): BeadItem[] | null {
     return [];
   }
 
-  try {
-    return JSON.parse(stdout) as BeadItem[];
-  } catch {
-    console.error("Error: failed to parse children output");
-    process.exitCode = 1;
-    return null;
+  const ids = extractIds(stdout);
+  // Skip the first ID (the parent itself)
+  const childIds = ids.slice(1);
+  if (childIds.length === 0) {
+    return [];
   }
+
+  const items: BeadItem[] = [];
+  for (const id of childIds) {
+    const bead = fetchBead(id);
+    if (bead) {
+      items.push(bead);
+    }
+  }
+  return items;
 }
 
 function runShow(args: string[]): void {
@@ -117,7 +151,7 @@ function runBlockers(args: string[]): void {
 function runPhases(): void {
   let stdout: string;
   try {
-    stdout = execFileSync("bd", ["list", "--label", "forge:phase", "--json"], {
+    stdout = execFileSync("bd", ["list", "--label", "forge:phase", "--status=all"], {
       encoding: "utf-8",
       timeout: 30_000,
     }).trim();
@@ -133,13 +167,18 @@ function runPhases(): void {
     return;
   }
 
-  let phases: BeadItem[];
-  try {
-    phases = JSON.parse(stdout) as BeadItem[];
-  } catch {
-    console.error("Error: failed to parse phases output");
-    process.exitCode = 1;
+  const phaseIds = extractIds(stdout);
+  if (phaseIds.length === 0) {
+    console.log("No phases found.");
     return;
+  }
+
+  const phases: BeadItem[] = [];
+  for (const id of phaseIds) {
+    const bead = fetchBead(id);
+    if (bead) {
+      phases.push(bead);
+    }
   }
 
   if (phases.length === 0) {
