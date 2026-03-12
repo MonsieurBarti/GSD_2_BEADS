@@ -14,7 +14,8 @@
   - [execute-phase](#execute-phase)
   - [verify-phase](#verify-phase)
   - [dashboard](#dashboard)
-- [Context Engineering with Beads](#context-engineering-with-beads)
+  - [prime-context](#prime-context)
+  - [remember / recall](#remember--recall)
 - [JSON Output](#json-output)
 - [Typical Project Lifecycle](#typical-project-lifecycle)
 
@@ -400,7 +401,7 @@ Uncovered requirements — no validates links from phase tasks (1):
 Summary: 1 uncovered requirement(s).
 ```
 
-> `--json` is not available for `verify-phase` subcommands.
+> `--json` is supported for all `verify-phase` subcommands.
 
 ---
 
@@ -456,45 +457,52 @@ Phases:
   PROJECT-p03  [open]         Phase: Planning        (open: 0, closed: 0, blocked: 0, 0%)
 ```
 
-> `--json` is not available for `dashboard` subcommands.
+> `--json` is supported for all `dashboard` subcommands.
 
 ---
 
-## Context Engineering with Beads
-
-`gsd2b` uses the `bd` CLI for all state management. You can use `bd` commands directly to prime context for AI agents, store and recall project memory, and inspect the bead graph.
-
 ### prime-context
 
-Use `bd show` to load a bead's full context into the AI agent's working memory:
+Assemble structured context from the bead graph for AI agent context windows. Outputs project vision, phase approach, open tasks with acceptance criteria, blockers, and relevant memories.
 
 ```bash
-# Show a phase with all its details (includes notes from plan-phase discuss)
-bd show PHASE_ID
+# Markdown output with Project, Phase, Tasks, Blockers, Memories sections
+gsd2b prime-context PHASE_ID
 
-# Show a task including acceptance criteria
-bd show TASK_ID --json
-
-# List all beads under a phase
-bd children PHASE_ID
-
-# Show the dependency tree
-bd tree PROJECT_ID
+# JSON output
+gsd2b prime-context PHASE_ID --json
 ```
+
+**Exit code**: 1 if phase-id is missing or invalid.
+
+---
 
 ### remember / recall
 
-`gsd2b new-project` stores the project vision automatically via `bd remember`. Use `bd remember` and `bd recall` directly for additional context:
+Thin CLI wrappers around `bd remember` / `bd memories` for persisting project memory.
 
 ```bash
 # Store a key decision
-bd remember "forge:project:PROJECT-001:auth-decision" "We chose JWT with RS256"
+gsd2b remember "auth-decision" "We chose JWT with RS256"
 
 # Recall it later
-bd recall "forge:project:PROJECT-001:auth-decision"
+gsd2b recall "auth-decision"
 
-# Store phase-level research
-bd remember "forge:phase:PHASE-001:research" "Reviewed 3 auth libraries; jose is best fit"
+# JSON output
+gsd2b remember "auth-decision" "JWT with RS256" --json
+gsd2b recall "auth-decision" --json
+```
+
+**Exit code**: 1 if required arguments are missing.
+
+You can also use `bd` commands directly for lower-level access:
+
+```bash
+bd show PHASE_ID          # Full bead details
+bd children PHASE_ID      # List child beads
+bd tree PROJECT_ID        # Dependency tree
+bd remember KEY VALUE     # Store memory
+bd memories KEY           # Recall memory
 ```
 
 ---
@@ -512,10 +520,11 @@ The `--json` flag is supported by the top-level informational commands:
 | `gsd2b milestone *` | No | plain text only |
 | `gsd2b plan-phase *` | No | plain text only |
 | `gsd2b execute-phase *` | No | plain text only |
-| `gsd2b verify-phase *` | No | plain text only |
-| `gsd2b dashboard *` | No | plain text only |
-
-For machine-readable output from subcommands, use the underlying `bd` CLI directly — most `bd` commands support `--json`.
+| `gsd2b verify-phase *` | Yes | check: `{ phase, tasks_missing_ac, open_with_ac, gaps }` / coverage: `{ phase, covered, uncovered }` |
+| `gsd2b dashboard *` | Yes | show: `{ phase, total, open, closed, blocked, coverage }` / blockers/phases: arrays |
+| `gsd2b prime-context` | Yes | `{ project, phase, tasks, blockers, memories }` |
+| `gsd2b remember` | Yes | `{ key, value, stored }` |
+| `gsd2b recall` | Yes | `{ key, value }` |
 
 ---
 
